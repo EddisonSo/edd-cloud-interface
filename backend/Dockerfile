@@ -1,4 +1,4 @@
-FROM golang:1.22 AS builder
+FROM golang:1.24.11 AS builder
 
 ENV GOTOOLCHAIN=auto
 ENV CGO_ENABLED=0

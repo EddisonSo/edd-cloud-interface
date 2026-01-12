@@ -76,6 +76,7 @@ function App() {
     total: 0,
     active: false,
   });
+  const [selectedFileName, setSelectedFileName] = useState("No file selected");
   const [downloadProgress, setDownloadProgress] = useState({});
   const [deleting, setDeleting] = useState({});
   const fileInputRef = useRef(null);
@@ -217,6 +218,7 @@ function App() {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      setSelectedFileName("No file selected");
       await loadFiles();
     } catch (err) {
       setStatus(err.message);
@@ -422,8 +424,28 @@ function App() {
             </div>
             <form onSubmit={handleUpload} className="upload-form">
               <div className="field">
-                <label htmlFor="upload-file">Select file</label>
-                <input id="upload-file" ref={fileInputRef} type="file" name="file" />
+                <span className="field-label">Select file</span>
+                <div className="file-picker">
+                  <input
+                    id="upload-file"
+                    ref={fileInputRef}
+                    type="file"
+                    name="file"
+                    className="file-input"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      setSelectedFileName(file ? file.name : "No file selected");
+                    }}
+                  />
+                  <label htmlFor="upload-file" className="file-button">
+                    Browse files
+                  </label>
+                  <span
+                    className={`file-name ${selectedFileName === "No file selected" ? "muted" : ""}`}
+                  >
+                    {selectedFileName}
+                  </span>
+                </div>
               </div>
               <button type="submit" disabled={uploading}>
                 {uploading ? "Uploading..." : "Upload"}
