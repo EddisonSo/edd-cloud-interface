@@ -569,27 +569,24 @@ function App() {
                     <p>Choose a namespace to view its files and activity.</p>
                   </div>
                 </div>
-                <div className="namespace-controls">
-                  <div className="field">
-                    <label htmlFor="namespace-new">Create namespace</label>
-                    <div className="namespace-create">
-                      <input
-                        id="namespace-new"
-                        type="text"
-                        placeholder="eg. team-alpha"
-                        value={namespaceInput}
-                        onChange={(event) => setNamespaceInput(event.target.value)}
-                      />
+                {user && (
+                  <div className="namespace-controls">
+                    <div className="field">
+                      <label htmlFor="namespace-new">Create namespace</label>
+                      <div className="namespace-create">
+                        <input
+                          id="namespace-new"
+                          type="text"
+                          placeholder="eg. team-alpha"
+                          value={namespaceInput}
+                          onChange={(event) => setNamespaceInput(event.target.value)}
+                        />
                         <button
                           type="button"
                           className="ghost"
                           onClick={async () => {
                             const nextNamespace = normalizeNamespace(namespaceInput);
                             if (!nextNamespace) {
-                              return;
-                            }
-                            if (namespaceHidden && !user) {
-                              setStatus("Sign in to create hidden namespaces.");
                               return;
                             }
                             try {
@@ -617,17 +614,17 @@ function App() {
                         >
                           Add
                         </button>
+                        <button
+                          type="button"
+                          className={`ghost toggle ${namespaceHidden ? "active" : ""}`}
+                          onClick={() => setNamespaceHidden((prev) => !prev)}
+                        >
+                          Hidden
+                        </button>
+                      </div>
                     </div>
-                    <label className="namespace-toggle">
-                      <input
-                        type="checkbox"
-                        checked={namespaceHidden}
-                        onChange={(event) => setNamespaceHidden(event.target.checked)}
-                      />
-                      Hidden namespace
-                    </label>
                   </div>
-                </div>
+                )}
                 <div className="namespace-list">
                   {namespaces.map((item) => (
                     <button
@@ -642,7 +639,47 @@ function App() {
                         <h3>{item.name}</h3>
                         <p>{item.count} files</p>
                       </div>
-                      <span className="namespace-pill">Open</span>
+                      <div className="namespace-actions">
+                        <span className="namespace-pill">Open</span>
+                        {user && (
+                          <button
+                            type="button"
+                            className="ghost namespace-delete"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (
+                                !window.confirm(
+                                  `Delete namespace "${item.name}" and all files inside it?`
+                                )
+                              ) {
+                                return;
+                              }
+                              fetch(
+                                `${buildApiBase()}/api/namespaces?name=${encodeURIComponent(
+                                  item.name
+                                )}`,
+                                {
+                                  method: "DELETE",
+                                  credentials: "include",
+                                }
+                              )
+                                .then(async (response) => {
+                                  if (!response.ok) {
+                                    const message = await response.text();
+                                    throw new Error(message || "Failed to delete namespace");
+                                  }
+                                  await loadNamespaces();
+                                  if (activeNamespace === item.name) {
+                                    closeNamespace();
+                                  }
+                                })
+                                .catch((err) => setStatus(err.message));
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>

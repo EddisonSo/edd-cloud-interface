@@ -188,7 +188,28 @@ func initAuthDB(db *sql.DB, username string, password string) error {
 			return err
 		}
 	}
+
+	if err := ensureNamespaceRow(db, defaultNamespace, false); err != nil {
+		return err
+	}
+	if err := ensureNamespaceRow(db, hiddenNamespace, true); err != nil {
+		return err
+	}
 	return nil
+}
+
+func ensureNamespaceRow(db *sql.DB, name string, hidden bool) error {
+	hiddenValue := 0
+	if hidden {
+		hiddenValue = 1
+	}
+	_, err := db.Exec(
+		`INSERT INTO namespaces (name, hidden) VALUES (?, ?)
+		 ON CONFLICT(name) DO NOTHING`,
+		name,
+		hiddenValue,
+	)
+	return err
 }
 
 func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +217,6 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	namespaceParam := strings.TrimSpace(r.URL.Query().Get("namespace"))
-	var listPrefix string
 	namespace := ""
 	if namespaceParam != "" {
 		var err error
@@ -211,12 +231,11 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		listPrefix = s.listPrefix + "/" + namespace
 	} else {
-		listPrefix = s.listPrefix
+		namespace = defaultNamespace
 	}
 
-	files, err := s.client.ListFiles(ctx, listPrefix)
+	files, err := s.client.ListFilesWithNamespace(ctx, namespace, s.listPrefix)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("list files failed: %v", err), http.StatusBadGateway)
 		return
@@ -228,23 +247,11 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 		if relative == "" {
 			continue
 		}
-		ns, name := splitNamespaceAndName(relative)
-		if namespace != "" {
-			ns = namespace
-			name = relativeNameWithPrefix(file.Path, listPrefix)
-		}
-		if name == "" {
-			continue
-		}
-		if ns == hiddenNamespace {
-			if _, ok := s.currentUser(r); !ok {
-				continue
-			}
-		}
+		name := relative
 		resp = append(resp, fileInfo{
 			Name:      name,
 			Path:      file.Path,
-			Namespace: ns,
+			Namespace: namespace,
 			Size:      file.Size,
 		})
 	}
@@ -258,8 +265,10 @@ func (s *server) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 		s.handleNamespaceList(w, r)
 	case http.MethodPost:
 		s.handleNamespaceCreate(w, r)
+	case http.MethodDelete:
+		s.handleNamespaceDelete(w, r)
 	default:
-		w.Header().Set("Allow", "GET, POST")
+		w.Header().Set("Allow", "GET, POST, DELETE")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
@@ -268,12 +277,6 @@ func (s *server) handleNamespaceList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	files, err := s.client.ListFiles(ctx, s.listPrefix)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("list files failed: %v", err), http.StatusBadGateway)
-		return
-	}
-
 	hiddenSet, err := s.loadHiddenNamespaces()
 	if err != nil {
 		http.Error(w, "failed to load namespaces", http.StatusInternalServerError)
@@ -281,41 +284,34 @@ func (s *server) handleNamespaceList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, authed := s.currentUser(r)
-	counts := make(map[string]int)
-	for _, file := range files {
-		relative := relativeNameWithPrefix(file.Path, s.listPrefix)
-		if relative == "" {
-			continue
-		}
-		ns, _ := splitNamespaceAndName(relative)
-		if ns == "" {
-			ns = defaultNamespace
-		}
-		if hiddenSet[ns] && !authed {
-			continue
-		}
-		counts[ns]++
-	}
-
 	namespaceRows, err := s.loadAllNamespaces()
 	if err != nil {
 		http.Error(w, "failed to load namespaces", http.StatusInternalServerError)
 		return
 	}
 
+	counts := make(map[string]int)
 	for _, entry := range namespaceRows {
 		hiddenSet[entry.Name] = entry.Hidden
 		if entry.Hidden && !authed {
 			continue
 		}
-		if _, ok := counts[entry.Name]; !ok {
-			counts[entry.Name] = 0
+		count, err := s.countNamespaceFiles(ctx, entry.Name)
+		if err != nil {
+			http.Error(w, "failed to list namespace files", http.StatusBadGateway)
+			return
 		}
+		counts[entry.Name] = count
 	}
 
 	if _, ok := counts[defaultNamespace]; !ok {
 		if !hiddenSet[defaultNamespace] || authed {
-			counts[defaultNamespace] = 0
+			count, err := s.countNamespaceFiles(ctx, defaultNamespace)
+			if err != nil {
+				http.Error(w, "failed to list namespace files", http.StatusBadGateway)
+				return
+			}
+			counts[defaultNamespace] = count
 		}
 	}
 
@@ -371,6 +367,40 @@ func (s *server) handleNamespaceCreate(w http.ResponseWriter, r *http.Request) {
 		Count:  0,
 		Hidden: payload.Hidden,
 	})
+}
+
+func (s *server) handleNamespaceDelete(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+	name, err := sanitizeNamespace(r.URL.Query().Get("name"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	files, err := s.client.ListFilesWithNamespace(ctx, name, s.listPrefix)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list files failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	for _, file := range files {
+		if err := s.client.DeleteFileWithNamespace(ctx, file.Path, name); err != nil {
+			http.Error(w, fmt.Sprintf("delete failed: %v", err), http.StatusBadGateway)
+			return
+		}
+	}
+
+	if err := s.deleteNamespace(name); err != nil {
+		http.Error(w, "failed to delete namespace", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -433,11 +463,11 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fullPath := s.prefix + "/" + namespace + "/" + name
+	fullPath := s.prefix + "/" + name
 	ctx, cancel := context.WithTimeout(r.Context(), s.uploadTTL)
 	defer cancel()
 
-	if err := s.ensureEmptyFile(ctx, fullPath); err != nil {
+	if err := s.ensureEmptyFile(ctx, namespace, fullPath); err != nil {
 		http.Error(w, fmt.Sprintf("prepare file failed: %v", err), http.StatusBadGateway)
 		return
 	}
@@ -448,7 +478,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Use PrepareUpload when file size is known to pre-allocate chunks
 	if total > 0 {
-		prepared, err := s.client.PrepareUpload(ctx, fullPath, total)
+		prepared, err := s.client.PrepareUploadWithNamespace(ctx, fullPath, namespace, total)
 		if err != nil {
 			reporter.Error(err)
 			http.Error(w, fmt.Sprintf("prepare upload failed: %v", err), http.StatusBadGateway)
@@ -466,7 +496,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Fallback to regular append when size is unknown (track read progress)
 		counting := &countingReader{reader: file, reporter: reporter}
-		if _, err := s.client.AppendFrom(ctx, fullPath, counting); err != nil {
+		if _, err := s.client.AppendFromWithNamespace(ctx, fullPath, namespace, counting); err != nil {
 			reporter.Error(err)
 			http.Error(w, fmt.Sprintf("upload failed: %v", err), http.StatusBadGateway)
 			return
@@ -499,14 +529,14 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fullPath := s.prefix + "/" + namespace + "/" + name
+	fullPath := s.prefix + "/" + name
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
 	transferID := s.transferID(r)
 	var total int64
 	if transferID != "" {
-		if info, err := s.client.GetFile(ctx, fullPath); err == nil {
+		if info, err := s.client.GetFileWithNamespace(ctx, fullPath, namespace); err == nil {
 			total = int64(info.Size)
 		}
 	}
@@ -517,7 +547,7 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 
-	if _, err := s.client.ReadTo(ctx, fullPath, counting); err != nil {
+	if _, err := s.client.ReadToWithNamespace(ctx, fullPath, namespace, counting); err != nil {
 		reporter.Error(err)
 		http.Error(w, fmt.Sprintf("download failed: %v", err), http.StatusBadGateway)
 		return
@@ -550,11 +580,11 @@ func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fullPath := s.prefix + "/" + namespace + "/" + name
+	fullPath := s.prefix + "/" + name
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	if err := s.client.DeleteFile(ctx, fullPath); err != nil {
+	if err := s.client.DeleteFileWithNamespace(ctx, fullPath, namespace); err != nil {
 		http.Error(w, fmt.Sprintf("delete failed: %v", err), http.StatusBadGateway)
 		return
 	}
@@ -800,13 +830,13 @@ func generateToken(length int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func (s *server) ensureEmptyFile(ctx context.Context, fullPath string) error {
-	if _, err := s.client.GetFile(ctx, fullPath); err == nil {
-		if err := s.client.DeleteFile(ctx, fullPath); err != nil {
+func (s *server) ensureEmptyFile(ctx context.Context, namespace, fullPath string) error {
+	if _, err := s.client.GetFileWithNamespace(ctx, fullPath, namespace); err == nil {
+		if err := s.client.DeleteFileWithNamespace(ctx, fullPath, namespace); err != nil {
 			return err
 		}
 	}
-	_, err := s.client.CreateFile(ctx, fullPath)
+	_, err := s.client.CreateFileWithNamespace(ctx, fullPath, namespace)
 	return err
 }
 
@@ -871,6 +901,26 @@ func (s *server) upsertNamespace(name string, hidden bool) error {
 		hiddenValue,
 	)
 	return err
+}
+
+func (s *server) deleteNamespace(name string) error {
+	_, err := s.db.Exec(`DELETE FROM namespaces WHERE name = ?`, name)
+	return err
+}
+
+func (s *server) countNamespaceFiles(ctx context.Context, namespace string) (int, error) {
+	files, err := s.client.ListFilesWithNamespace(ctx, namespace, s.listPrefix)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, file := range files {
+		if relativeNameWithPrefix(file.Path, s.listPrefix) == "" {
+			continue
+		}
+		count++
+	}
+	return count, nil
 }
 
 func relativeNameWithPrefix(fullPath, prefix string) string {
