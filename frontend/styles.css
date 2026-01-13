@@ -532,7 +532,7 @@ button:not(:disabled):hover {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--muted);
-  padding: 0 6px 6px;
+  padding: 0 16px 6px;
 }
 
 .file-row {

@@ -810,7 +810,7 @@ function App() {
                   <section className="panel files">
                     <div className="panel-header">
                       <div>
-                        <h2>Shared files</h2>
+                        <h2>Files</h2>
                         <p>Download or remove stored objects in {activeNamespace}.</p>
                       </div>
                       <div className="panel-actions">
