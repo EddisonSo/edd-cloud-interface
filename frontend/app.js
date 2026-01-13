@@ -13,14 +13,8 @@ function formatBytes(bytes) {
 }
 
 function resolveApiHost() {
-  const host = window.location.host;
-  if (host.startsWith("cloud.")) {
-    return host.replace("cloud.", "cloud-api.");
-  }
-  if (host.startsWith("cloud-api.")) {
-    return host;
-  }
-  return host;
+  // Use same-origin for API calls - ingress routes /api/* to backend
+  return window.location.host;
 }
 
 function buildApiBase() {
