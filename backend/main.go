@@ -60,7 +60,7 @@ type namespaceInfo struct {
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	master := flag.String("master", "127.0.0.1:50051", "GFS master gRPC address")
-	prefix := flag.String("prefix", "/shared", "GFS path prefix for shared files")
+	prefix := flag.String("prefix", "/sfs", "GFS namespace prefix for simple file store")
 	staticDir := flag.String("static", "frontend", "path to frontend assets")
 	maxUploadMB := flag.Int64("max-upload-mb", 0, "max upload size in MB (0 = unlimited)")
 	uploadTTL := flag.Duration("upload-timeout", 10*time.Minute, "max time allowed for a single upload")
@@ -105,7 +105,7 @@ func main() {
 		prefix:     cleanPrefix,
 		staticDir:  absStatic,
 		maxUpload:  maxUploadBytes(*maxUploadMB),
-		listPrefix: cleanPrefix,
+		listPrefix: "",
 		uploadTTL:  *uploadTTL,
 		db:         db,
 		cookieName: "sfs_session",
@@ -129,7 +129,7 @@ func main() {
 
 	log.Printf("listening on %s", *addr)
 	log.Printf("serving frontend from %s", srv.staticDir)
-	log.Printf("sharing files under %s", srv.prefix)
+		log.Printf("sharing files under namespace prefix %s", srv.prefix)
 	if err := http.ListenAndServe(*addr, logRequests(mux)); err != nil {
 		log.Fatalf("server stopped: %v", err)
 	}
@@ -235,7 +235,7 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 		namespace = defaultNamespace
 	}
 
-	files, err := s.client.ListFilesWithNamespace(ctx, namespace, s.listPrefix)
+	files, err := s.client.ListFilesWithNamespace(ctx, s.gfsNamespace(namespace), s.listPrefix)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("list files failed: %v", err), http.StatusBadGateway)
 		return
@@ -392,14 +392,14 @@ func (s *server) handleNamespaceDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	files, err := s.client.ListFilesWithNamespace(ctx, name, s.listPrefix)
+	files, err := s.client.ListFilesWithNamespace(ctx, s.gfsNamespace(name), s.listPrefix)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("list files failed: %v", err), http.StatusBadGateway)
 		return
 	}
 
 	for _, file := range files {
-		if err := s.client.DeleteFileWithNamespace(ctx, file.Path, name); err != nil {
+		if err := s.client.DeleteFileWithNamespace(ctx, file.Path, s.gfsNamespace(name)); err != nil {
 			http.Error(w, fmt.Sprintf("delete failed: %v", err), http.StatusBadGateway)
 			return
 		}
@@ -511,7 +511,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fullPath := s.prefix + "/" + name
+	fullPath := name
 	ctx, cancel := context.WithTimeout(r.Context(), s.uploadTTL)
 	defer cancel()
 
@@ -526,7 +526,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Use PrepareUpload when file size is known to pre-allocate chunks
 	if total > 0 {
-		prepared, err := s.client.PrepareUploadWithNamespace(ctx, fullPath, namespace, total)
+		prepared, err := s.client.PrepareUploadWithNamespace(ctx, fullPath, s.gfsNamespace(namespace), total)
 		if err != nil {
 			reporter.Error(err)
 			http.Error(w, fmt.Sprintf("prepare upload failed: %v", err), http.StatusBadGateway)
@@ -544,7 +544,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Fallback to regular append when size is unknown (track read progress)
 		counting := &countingReader{reader: file, reporter: reporter}
-		if _, err := s.client.AppendFromWithNamespace(ctx, fullPath, namespace, counting); err != nil {
+		if _, err := s.client.AppendFromWithNamespace(ctx, fullPath, s.gfsNamespace(namespace), counting); err != nil {
 			reporter.Error(err)
 			http.Error(w, fmt.Sprintf("upload failed: %v", err), http.StatusBadGateway)
 			return
@@ -577,14 +577,14 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fullPath := s.prefix + "/" + name
+	fullPath := name
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
 	transferID := s.transferID(r)
 	var total int64
 	if transferID != "" {
-		if info, err := s.client.GetFileWithNamespace(ctx, fullPath, namespace); err == nil {
+		if info, err := s.client.GetFileWithNamespace(ctx, fullPath, s.gfsNamespace(namespace)); err == nil {
 			total = int64(info.Size)
 		}
 	}
@@ -595,7 +595,7 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 
-	if _, err := s.client.ReadToWithNamespace(ctx, fullPath, namespace, counting); err != nil {
+	if _, err := s.client.ReadToWithNamespace(ctx, fullPath, s.gfsNamespace(namespace), counting); err != nil {
 		reporter.Error(err)
 		http.Error(w, fmt.Sprintf("download failed: %v", err), http.StatusBadGateway)
 		return
@@ -628,11 +628,11 @@ func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fullPath := s.prefix + "/" + name
+	fullPath := name
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	if err := s.client.DeleteFileWithNamespace(ctx, fullPath, namespace); err != nil {
+	if err := s.client.DeleteFileWithNamespace(ctx, fullPath, s.gfsNamespace(namespace)); err != nil {
 		http.Error(w, fmt.Sprintf("delete failed: %v", err), http.StatusBadGateway)
 		return
 	}
@@ -879,12 +879,12 @@ func generateToken(length int) (string, error) {
 }
 
 func (s *server) ensureEmptyFile(ctx context.Context, namespace, fullPath string) error {
-	if _, err := s.client.GetFileWithNamespace(ctx, fullPath, namespace); err == nil {
-		if err := s.client.DeleteFileWithNamespace(ctx, fullPath, namespace); err != nil {
+	if _, err := s.client.GetFileWithNamespace(ctx, fullPath, s.gfsNamespace(namespace)); err == nil {
+		if err := s.client.DeleteFileWithNamespace(ctx, fullPath, s.gfsNamespace(namespace)); err != nil {
 			return err
 		}
 	}
-	_, err := s.client.CreateFileWithNamespace(ctx, fullPath, namespace)
+	_, err := s.client.CreateFileWithNamespace(ctx, fullPath, s.gfsNamespace(namespace))
 	return err
 }
 
@@ -956,6 +956,14 @@ func (s *server) deleteNamespace(name string) error {
 	return err
 }
 
+func (s *server) gfsNamespace(namespace string) string {
+	base := strings.TrimPrefix(s.prefix, "/")
+	if base == "" {
+		return namespace
+	}
+	return path.Join(base, namespace)
+}
+
 func (s *server) updateNamespaceHidden(name string, hidden bool) error {
 	hiddenValue := 0
 	if hidden {
@@ -984,7 +992,7 @@ func (s *server) namespaceExists(name string) (bool, error) {
 }
 
 func (s *server) countNamespaceFiles(ctx context.Context, namespace string) (int, error) {
-	files, err := s.client.ListFilesWithNamespace(ctx, namespace, s.listPrefix)
+	files, err := s.client.ListFilesWithNamespace(ctx, s.gfsNamespace(namespace), s.listPrefix)
 	if err != nil {
 		return 0, err
 	}
@@ -999,6 +1007,9 @@ func (s *server) countNamespaceFiles(ctx context.Context, namespace string) (int
 }
 
 func relativeNameWithPrefix(fullPath, prefix string) string {
+	if prefix == "" {
+		return strings.TrimPrefix(fullPath, "/")
+	}
 	trimmed := strings.TrimPrefix(fullPath, prefix)
 	trimmed = strings.TrimPrefix(trimmed, "/")
 	if trimmed == "" || trimmed == fullPath {

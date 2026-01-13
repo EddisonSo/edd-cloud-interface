@@ -671,54 +671,6 @@ function App() {
                       </div>
                       <div className="namespace-actions">
                         <span className="namespace-pill">Open</span>
-                        {user && (
-                          <button
-                            type="button"
-                            className="ghost namespace-toggle"
-                            disabled={item.name === hiddenNamespace}
-                            title={
-                              item.name === hiddenNamespace
-                                ? "Reserved namespace cannot be unhidden."
-                                : undefined
-                            }
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              fetch(`${buildApiBase()}/api/namespaces`, {
-                                method: "PATCH",
-                                credentials: "include",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  name: item.name,
-                                  hidden: !item.hidden,
-                                }),
-                              })
-                                .then(async (response) => {
-                                  if (!response.ok) {
-                                    const message = await response.text();
-                                    throw new Error(message || "Failed to update namespace");
-                                  }
-                                  await loadNamespaces();
-                                })
-                                .catch((err) => setStatus(err.message));
-                            }}
-                          >
-                            {item.hidden ? "Unhide" : "Hide"}
-                          </button>
-                        )}
-                        {user && (
-                          <button
-                            type="button"
-                            className="ghost namespace-delete"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setNamespaceDeleteTarget(item);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
                       </div>
                     </button>
                   ))}
@@ -738,6 +690,65 @@ function App() {
                         {namespaces.find((item) => item.name === activeNamespace)?.count ?? 0}
                       </span>
                     </div>
+                    {user && (
+                      <div className="namespace-hero-actions">
+                        <button
+                          type="button"
+                          className="ghost namespace-toggle"
+                          disabled={activeNamespace === hiddenNamespace}
+                          title={
+                            activeNamespace === hiddenNamespace
+                              ? "Reserved namespace cannot be unhidden."
+                              : undefined
+                          }
+                          onClick={() => {
+                            const current = namespaces.find(
+                              (item) => item.name === activeNamespace
+                            );
+                            if (!current) {
+                              return;
+                            }
+                            fetch(`${buildApiBase()}/api/namespaces`, {
+                              method: "PATCH",
+                              credentials: "include",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                name: current.name,
+                                hidden: !current.hidden,
+                              }),
+                            })
+                              .then(async (response) => {
+                                if (!response.ok) {
+                                  const message = await response.text();
+                                  throw new Error(message || "Failed to update namespace");
+                                }
+                                await loadNamespaces();
+                              })
+                              .catch((err) => setStatus(err.message));
+                          }}
+                        >
+                          {namespaces.find((item) => item.name === activeNamespace)?.hidden
+                            ? "Unhide"
+                            : "Hide"}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost namespace-delete"
+                          onClick={() => {
+                            const current = namespaces.find(
+                              (item) => item.name === activeNamespace
+                            );
+                            if (current) {
+                              setNamespaceDeleteTarget(current);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </section>
                   {user && (
                     <section className="panel upload">

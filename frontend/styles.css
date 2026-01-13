@@ -860,6 +860,12 @@ button:not(:disabled):hover {
   gap: 16px;
 }
 
+.namespace-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .namespace-hero h2 {
   margin: 0;
   font-size: 1.7rem;
@@ -1018,6 +1024,10 @@ button:not(:disabled):hover {
   .namespace-hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .namespace-hero-actions {
+    width: 100%;
   }
 
   .namespace-count {
