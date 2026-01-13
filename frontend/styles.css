@@ -762,6 +762,8 @@ button:not(:disabled):hover {
 .namespace-toggle {
   padding: 6px 12px;
   font-size: 0.8rem;
+  min-width: 72px;
+  text-align: center;
 }
 
 .namespace-delete {
