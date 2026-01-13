@@ -48,8 +48,6 @@ body {
 }
 
 .sidebar {
-  position: sticky;
-  top: 24px;
   height: fit-content;
   display: flex;
   flex-direction: column;
