@@ -89,6 +89,43 @@ function App() {
   const [downloadProgress, setDownloadProgress] = useState({});
   const [deleting, setDeleting] = useState({});
   const fileInputRef = useRef(null);
+  const navItems = [
+    { id: "storage", label: "Storage" },
+    { id: "compute", label: "Compute" },
+    { id: "message-queue", label: "Message Queue" },
+    { id: "datastore", label: "Datastore" },
+    { id: "health", label: "Health" },
+  ];
+
+  const tabCopy = {
+    storage: {
+      eyebrow: "Cloud Storage",
+      title: "Simple File Share",
+      lead: "Manage shared assets with clear status, fast uploads, and controlled access.",
+    },
+    compute: {
+      eyebrow: "Compute Services",
+      title: "Virtual Compute",
+      lead: "Provisioned compute is on deck. This space will hold clusters and runtime controls.",
+    },
+    "message-queue": {
+      eyebrow: "Messaging",
+      title: "Message Queue",
+      lead: "Queue and stream services are not available yet, but the surface is ready.",
+    },
+    datastore: {
+      eyebrow: "Data Systems",
+      title: "Datastore",
+      lead: "Datastore provisioning is coming soon with managed database workflows.",
+    },
+    health: {
+      eyebrow: "Operations",
+      title: "Health Monitor",
+      lead: "Live telemetry for master connectivity and chunkserver status.",
+    },
+  };
+
+  const activeCopy = tabCopy[activeTab] ?? tabCopy.storage;
 
   const loadFiles = async () => {
     try {
@@ -348,22 +385,16 @@ function App() {
           <span className="brand-name">Cloud Share</span>
         </div>
         <nav className="nav">
-          <button
-            type="button"
-            className={`nav-item ${activeTab === "storage" ? "active" : ""}`}
-            onClick={() => setActiveTab("storage")}
-          >
-            Storage
-          </button>
-          {user && (
+          {navItems.map((item) => (
             <button
+              key={item.id}
               type="button"
-              className={`nav-item ${activeTab === "health" ? "active" : ""}`}
-              onClick={() => setActiveTab("health")}
+              className={`nav-item ${activeTab === item.id ? "active" : ""}`}
+              onClick={() => setActiveTab(item.id)}
             >
-              Health
+              {item.label}
             </button>
-          )}
+          ))}
         </nav>
         <div className="sidebar-foot">
           <span className="sidebar-label">Region</span>
@@ -410,11 +441,9 @@ function App() {
       <main className="content">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Cloud Storage</p>
-            <h1>Simple File Share</h1>
-            <p className="lead">
-              Manage shared assets with clear status, fast uploads, and controlled access.
-            </p>
+            <p className="eyebrow">{activeCopy.eyebrow}</p>
+            <h1>{activeCopy.title}</h1>
+            <p className="lead">{activeCopy.lead}</p>
           </div>
           <div className="summary">
             <div className="summary-card">
@@ -599,6 +628,150 @@ function App() {
                 {(health.servers || []).length === 0 && (
                   <p className="empty">No chunkservers reported.</p>
                 )}
+              </div>
+            </section>
+          )}
+          {activeTab === "compute" && (
+            <section className="panel placeholder">
+              <div className="panel-header">
+                <div>
+                  <h2>Compute</h2>
+                  <p>Provision and manage compute workloads once the service is ready.</p>
+                </div>
+                <span className="badge">Unimplemented</span>
+              </div>
+              <div className="placeholder-body">
+                <div className="placeholder-hero">
+                  <svg
+                    className="placeholder-image"
+                    viewBox="0 0 200 140"
+                    role="img"
+                    aria-label="Building illustration"
+                  >
+                    <rect x="20" y="30" width="60" height="90" rx="8" fill="#dbeafe" />
+                    <rect x="85" y="15" width="95" height="105" rx="10" fill="#e2e8f0" />
+                    <rect x="30" y="45" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="45" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="30" y="65" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="65" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="30" y="85" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="85" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="100" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="100" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="100" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="120" y="92" width="40" height="28" rx="4" fill="#cbd5f5" />
+                    <rect x="0" y="120" width="200" height="12" rx="6" fill="#bfdbfe" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Compute infrastructure coming soon</h3>
+                  <p>
+                    This area will provide access to clusters, nodes, and runtime policies. For now,
+                    it is staged for future integration.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+          {activeTab === "message-queue" && (
+            <section className="panel placeholder">
+              <div className="panel-header">
+                <div>
+                  <h2>Message Queue</h2>
+                  <p>Queue status, topics, and delivery insights will appear here.</p>
+                </div>
+                <span className="badge">Unimplemented</span>
+              </div>
+              <div className="placeholder-body">
+                <div className="placeholder-hero">
+                  <svg
+                    className="placeholder-image"
+                    viewBox="0 0 200 140"
+                    role="img"
+                    aria-label="Building illustration"
+                  >
+                    <rect x="20" y="30" width="60" height="90" rx="8" fill="#dbeafe" />
+                    <rect x="85" y="15" width="95" height="105" rx="10" fill="#e2e8f0" />
+                    <rect x="30" y="45" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="45" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="30" y="65" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="65" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="30" y="85" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="85" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="100" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="100" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="100" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="120" y="92" width="40" height="28" rx="4" fill="#cbd5f5" />
+                    <rect x="0" y="120" width="200" height="12" rx="6" fill="#bfdbfe" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Queue services are staged</h3>
+                  <p>
+                    Messaging endpoints and observability controls will land here. For now, this
+                    surface is a placeholder for upcoming work.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+          {activeTab === "datastore" && (
+            <section className="panel placeholder">
+              <div className="panel-header">
+                <div>
+                  <h2>Datastore</h2>
+                  <p>Managed databases and backups will live in this workspace.</p>
+                </div>
+                <span className="badge">Unimplemented</span>
+              </div>
+              <div className="placeholder-body">
+                <div className="placeholder-hero">
+                  <svg
+                    className="placeholder-image"
+                    viewBox="0 0 200 140"
+                    role="img"
+                    aria-label="Building illustration"
+                  >
+                    <rect x="20" y="30" width="60" height="90" rx="8" fill="#dbeafe" />
+                    <rect x="85" y="15" width="95" height="105" rx="10" fill="#e2e8f0" />
+                    <rect x="30" y="45" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="45" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="30" y="65" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="65" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="30" y="85" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="50" y="85" width="12" height="12" rx="2" fill="#93c5fd" />
+                    <rect x="100" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="30" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="100" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="52" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="100" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="124" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="148" y="74" width="16" height="14" rx="2" fill="#94a3b8" />
+                    <rect x="120" y="92" width="40" height="28" rx="4" fill="#cbd5f5" />
+                    <rect x="0" y="120" width="200" height="12" rx="6" fill="#bfdbfe" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Datastore controls on deck</h3>
+                  <p>
+                    Schema management, backups, and performance insights will populate this
+                    section after the service is implemented.
+                  </p>
+                </div>
               </div>
             </section>
           )}

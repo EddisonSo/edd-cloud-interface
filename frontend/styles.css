@@ -444,6 +444,21 @@ button:not(:disabled):hover {
   gap: 16px;
 }
 
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 115, 232, 0.2);
+  background: rgba(26, 115, 232, 0.08);
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .ghost {
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.12);
@@ -663,6 +678,44 @@ button:not(:disabled):hover {
   color: var(--muted);
 }
 
+.placeholder {
+  display: grid;
+  gap: 22px;
+}
+
+.placeholder-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.placeholder-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #ffffff 0%, #f0f5ff 100%);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.placeholder-image {
+  width: 100%;
+  height: auto;
+  max-width: 220px;
+}
+
+.placeholder h3 {
+  margin: 0 0 8px;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+.placeholder p {
+  margin: 0;
+  color: var(--muted);
+}
+
 @keyframes floatIn {
   from {
     transform: translateY(16px);
@@ -746,6 +799,10 @@ button:not(:disabled):hover {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .placeholder-body {
+    grid-template-columns: 1fr;
   }
 }
 
