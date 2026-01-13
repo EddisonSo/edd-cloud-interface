@@ -775,7 +775,7 @@ button:not(:disabled):hover {
   padding: 0.5rem 1rem;
   font-size: 0.75rem;
   color: var(--muted);
-  background: var(--bg-alt);
+  background: lightblue;
   border-top: 1px solid var(--stroke);
   z-index: 100;
 }
