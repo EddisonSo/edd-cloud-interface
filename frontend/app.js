@@ -214,6 +214,7 @@ function App() {
       const response = await fetch(`${buildApiBase()}/api/upload?id=${encodeURIComponent(transferId)}`, {
         method: "POST",
         body: formData,
+        credentials: "include",
         headers: {
           "X-File-Size": file.size.toString(),
         },
