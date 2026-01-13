@@ -763,3 +763,19 @@ button:not(:disabled):hover {
     transition: none !important;
   }
 }
+
+.build-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--bg-alt);
+  border-top: 1px solid var(--stroke);
+  z-index: 100;
+}

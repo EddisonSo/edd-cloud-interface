@@ -603,6 +603,10 @@ function App() {
           )}
         </div>
       </main>
+      <footer className="build-footer">
+        <span>Build: {window.BUILD_INFO?.commit || "dev"}</span>
+        <span>{window.BUILD_INFO?.time || ""}</span>
+      </footer>
     </div>
   );
 }
