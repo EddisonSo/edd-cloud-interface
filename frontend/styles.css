@@ -229,6 +229,10 @@ h1 {
   gap: 12px;
 }
 
+.upload-form > button {
+  margin-bottom: 4px;
+}
+
 .field {
   display: grid;
   gap: 6px;
