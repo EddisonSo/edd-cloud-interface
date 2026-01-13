@@ -267,8 +267,10 @@ func (s *server) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 		s.handleNamespaceCreate(w, r)
 	case http.MethodDelete:
 		s.handleNamespaceDelete(w, r)
+	case http.MethodPatch:
+		s.handleNamespaceUpdate(w, r)
 	default:
-		w.Header().Set("Allow", "GET, POST, DELETE")
+		w.Header().Set("Allow", "GET, POST, DELETE, PATCH")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
@@ -357,6 +359,14 @@ func (s *server) handleNamespaceCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if exists, err := s.namespaceExists(name); err != nil {
+		http.Error(w, "failed to check namespace", http.StatusInternalServerError)
+		return
+	} else if exists {
+		http.Error(w, "namespace already exists", http.StatusConflict)
+		return
+	}
+
 	if err := s.upsertNamespace(name, payload.Hidden); err != nil {
 		http.Error(w, "failed to save namespace", http.StatusInternalServerError)
 		return
@@ -401,6 +411,44 @@ func (s *server) handleNamespaceDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+type namespaceUpdateRequest struct {
+	Name   string `json:"name"`
+	Hidden bool   `json:"hidden"`
+}
+
+func (s *server) handleNamespaceUpdate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAuth(w, r); !ok {
+		return
+	}
+
+	var payload namespaceUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	name, err := sanitizeNamespace(payload.Name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if name == hiddenNamespace && !payload.Hidden {
+		http.Error(w, "hidden namespace must be marked hidden", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.updateNamespaceHidden(name, payload.Hidden); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, namespaceInfo{
+		Name:   name,
+		Hidden: payload.Hidden,
+	})
 }
 
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -906,6 +954,33 @@ func (s *server) upsertNamespace(name string, hidden bool) error {
 func (s *server) deleteNamespace(name string) error {
 	_, err := s.db.Exec(`DELETE FROM namespaces WHERE name = ?`, name)
 	return err
+}
+
+func (s *server) updateNamespaceHidden(name string, hidden bool) error {
+	hiddenValue := 0
+	if hidden {
+		hiddenValue = 1
+	}
+	result, err := s.db.Exec(`UPDATE namespaces SET hidden = ? WHERE name = ?`, hiddenValue, name)
+	if err != nil {
+		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated == 0 {
+		return fmt.Errorf("namespace not found")
+	}
+	return nil
+}
+
+func (s *server) namespaceExists(name string) (bool, error) {
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(1) FROM namespaces WHERE name = ?`, name).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (s *server) countNamespaceFiles(ctx context.Context, namespace string) (int, error) {

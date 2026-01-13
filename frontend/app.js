@@ -94,8 +94,12 @@ function App() {
   const [activeNamespace, setActiveNamespace] = useState("");
   const [namespaceInput, setNamespaceInput] = useState("");
   const [namespaceHidden, setNamespaceHidden] = useState(false);
+  const [namespaceDeleteTarget, setNamespaceDeleteTarget] = useState(null);
   const [showNamespaceView, setShowNamespaceView] = useState(false);
   const fileInputRef = useRef(null);
+  const modalRef = useRef(null);
+  const modalCancelRef = useRef(null);
+  const lastActiveElementRef = useRef(null);
   const navItems = [
     { id: "storage", label: "Storage" },
     { id: "compute", label: "Compute" },
@@ -135,6 +139,29 @@ function App() {
   const activeCopy = tabCopy[activeTab] ?? tabCopy.storage;
 
   const normalizeNamespace = (value) => (value && value.trim() ? value.trim() : defaultNamespace);
+
+  useEffect(() => {
+    if (!namespaceDeleteTarget) {
+      return undefined;
+    }
+    lastActiveElementRef.current = document.activeElement;
+    if (modalCancelRef.current) {
+      modalCancelRef.current.focus();
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setNamespaceDeleteTarget(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      const previous = lastActiveElementRef.current;
+      if (previous && typeof previous.focus === "function") {
+        previous.focus();
+      }
+    };
+  }, [namespaceDeleteTarget]);
 
   const loadFiles = async (namespace = activeNamespace) => {
     try {
@@ -600,6 +627,9 @@ function App() {
                                 }),
                               });
                               if (!response.ok) {
+                                if (response.status === 409) {
+                                  throw new Error("Namespace already exists.");
+                                }
                                 const message = await response.text();
                                 throw new Error(message || "Failed to create namespace");
                               }
@@ -644,36 +674,46 @@ function App() {
                         {user && (
                           <button
                             type="button"
-                            className="ghost namespace-delete"
+                            className="ghost namespace-toggle"
+                            disabled={item.name === hiddenNamespace}
+                            title={
+                              item.name === hiddenNamespace
+                                ? "Reserved namespace cannot be unhidden."
+                                : undefined
+                            }
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (
-                                !window.confirm(
-                                  `Delete namespace "${item.name}" and all files inside it?`
-                                )
-                              ) {
-                                return;
-                              }
-                              fetch(
-                                `${buildApiBase()}/api/namespaces?name=${encodeURIComponent(
-                                  item.name
-                                )}`,
-                                {
-                                  method: "DELETE",
-                                  credentials: "include",
-                                }
-                              )
+                              fetch(`${buildApiBase()}/api/namespaces`, {
+                                method: "PATCH",
+                                credentials: "include",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  name: item.name,
+                                  hidden: !item.hidden,
+                                }),
+                              })
                                 .then(async (response) => {
                                   if (!response.ok) {
                                     const message = await response.text();
-                                    throw new Error(message || "Failed to delete namespace");
+                                    throw new Error(message || "Failed to update namespace");
                                   }
                                   await loadNamespaces();
-                                  if (activeNamespace === item.name) {
-                                    closeNamespace();
-                                  }
                                 })
                                 .catch((err) => setStatus(err.message));
+                            }}
+                          >
+                            {item.hidden ? "Unhide" : "Hide"}
+                          </button>
+                        )}
+                        {user && (
+                          <button
+                            type="button"
+                            className="ghost namespace-delete"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setNamespaceDeleteTarget(item);
                             }}
                           >
                             Delete
@@ -1052,6 +1092,96 @@ function App() {
           )}
         </div>
       </main>
+      {namespaceDeleteTarget && (
+        <div
+          className="modal-overlay"
+          onClick={() => setNamespaceDeleteTarget(null)}
+          role="presentation"
+        >
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== "Tab") {
+                return;
+              }
+              const container = modalRef.current;
+              if (!container) {
+                return;
+              }
+              const focusable = container.querySelectorAll(
+                'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+              );
+              if (focusable.length === 0) {
+                return;
+              }
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="namespace-delete-title"
+            ref={modalRef}
+          >
+            <h3 id="namespace-delete-title">Delete namespace?</h3>
+            <p>
+              This will remove "{namespaceDeleteTarget.name}" and all files inside it.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setNamespaceDeleteTarget(null)}
+                ref={modalCancelRef}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={async () => {
+                  const target = namespaceDeleteTarget;
+                  if (!target) {
+                    return;
+                  }
+                  try {
+                    const response = await fetch(
+                      `${buildApiBase()}/api/namespaces?name=${encodeURIComponent(
+                        target.name
+                      )}`,
+                      {
+                        method: "DELETE",
+                        credentials: "include",
+                      }
+                    );
+                    if (!response.ok) {
+                      const message = await response.text();
+                      throw new Error(message || "Failed to delete namespace");
+                    }
+                    setNamespaceDeleteTarget(null);
+                    await loadNamespaces();
+                    if (activeNamespace === target.name) {
+                      closeNamespace();
+                    }
+                  } catch (err) {
+                    setNamespaceDeleteTarget(null);
+                    setStatus(err.message);
+                  }
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <footer className="build-footer">
         <span>Build: {window.BUILD_INFO?.commit || "dev"}</span>
         <span>{window.BUILD_INFO?.time || ""}</span>

@@ -759,9 +759,51 @@ button:not(:disabled):hover {
   gap: 10px;
 }
 
+.namespace-toggle {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
 .namespace-delete {
   padding: 6px 12px;
   font-size: 0.8rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.modal {
+  width: min(420px, 100%);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 24px 40px rgba(15, 23, 42, 0.2);
+  padding: 22px;
+}
+
+.modal h3 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.modal p {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .namespace-card h3 {
