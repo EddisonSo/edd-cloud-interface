@@ -1203,11 +1203,19 @@ func (s *server) currentUserWithDisplay(r *http.Request) (string, string, bool) 
 }
 
 func (s *server) sessionToken(r *http.Request) string {
-	cookie, err := r.Cookie(s.cookieName)
-	if err != nil {
-		return ""
+	// Check all cookies with matching name (handles duplicate cookies from different domains)
+	for _, cookie := range r.Cookies() {
+		if cookie.Name == s.cookieName && cookie.Value != "" {
+			// Verify this token exists in database
+			var count int
+			err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE token = $1 AND expires_at > $2`,
+				cookie.Value, time.Now().Unix()).Scan(&count)
+			if err == nil && count > 0 {
+				return cookie.Value
+			}
+		}
 	}
-	return cookie.Value
+	return ""
 }
 
 func generateToken(length int) (string, error) {
