@@ -59,11 +59,22 @@ func (v *SessionValidator) ValidateSession(sessionToken string) (string, error) 
 	return session.Username, nil
 }
 
-// GetSessionToken extracts the session token from the request cookie
-func GetSessionToken(r *http.Request) string {
-	cookie, err := r.Cookie("sfs_session")
-	if err != nil {
-		return ""
+// GetSessionTokens extracts all session tokens from request cookies
+func GetSessionTokens(r *http.Request) []string {
+	var tokens []string
+	for _, cookie := range r.Cookies() {
+		if cookie.Name == "sfs_session" && cookie.Value != "" {
+			tokens = append(tokens, cookie.Value)
+		}
 	}
-	return cookie.Value
+	return tokens
+}
+
+// GetSessionToken extracts the first session token (for backwards compatibility)
+func GetSessionToken(r *http.Request) string {
+	tokens := GetSessionTokens(r)
+	if len(tokens) > 0 {
+		return tokens[0]
+	}
+	return ""
 }

@@ -71,13 +71,12 @@ var adminUsername = os.Getenv("ADMIN_USERNAME")
 // adminMiddleware validates session and checks admin status
 func (h *Handler) adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := auth.GetSessionToken(r)
-		if token != "" {
+		// Try all session tokens until one is valid
+		for _, token := range auth.GetSessionTokens(r) {
 			username, err := h.validator.ValidateSession(token)
 			if err != nil {
 				slog.Error("session validation failed", "error", err)
-				http.Error(w, "authentication error", http.StatusInternalServerError)
-				return
+				continue
 			}
 			if adminUsername != "" && username == adminUsername {
 				r = r.WithContext(setUserContext(r.Context(), 1, username))
@@ -160,13 +159,12 @@ func (h *Handler) Healthz(w http.ResponseWriter, r *http.Request) {
 // authMiddleware validates session and injects user info into context
 func (h *Handler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := auth.GetSessionToken(r)
-		if token != "" {
+		// Try all session tokens until one is valid
+		for _, token := range auth.GetSessionTokens(r) {
 			username, err := h.validator.ValidateSession(token)
 			if err != nil {
 				slog.Error("session validation failed", "error", err)
-				http.Error(w, "authentication error", http.StatusInternalServerError)
-				return
+				continue
 			}
 			if username != "" {
 				// For now, use username as user ID (simplified)
