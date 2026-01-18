@@ -1043,7 +1043,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Domain:   getCookieDomain(r),
 		Expires:  expires,
 		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteLaxMode,
 		Secure:   isSecureRequest(r),
 	})
 	writeJSON(w, sessionResponse{Username: payload.Username, DisplayName: displayName, IsAdmin: isAdmin(payload.Username)})
@@ -1070,7 +1070,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Domain:   getCookieDomain(r),
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteLaxMode,
 		Secure:   isSecureRequest(r),
 	})
 	writeJSON(w, map[string]string{"status": "ok"})
